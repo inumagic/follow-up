@@ -61,6 +61,7 @@
     .auth-panel p { color: var(--muted); font-size: 13px; line-height: 1.6; }
     .auth-form { display: grid; gap: 14px; }
     .auth-form input { width: 100%; margin-top: 6px; }
+    .text-button { padding: 0; color: var(--green-dark); background: transparent; border: 0; font-size: 12px; text-align: left; text-decoration: underline; }
     .logout-button { padding: 8px 12px; color: var(--green-dark); background: white; border: 1px solid #cddbd2; border-radius: 8px; font-size: 12px; font-weight: 700; }
     .dashboard-top p { margin: 0; color: var(--muted); font-size: 13px; }
     .button-secondary {
@@ -155,7 +156,7 @@
   <header class="topbar">
     <div class="brand">
       <img class="brand-mark" src="brand-logo.png" alt="" aria-hidden="true">
-      <div>回診小管家<small>FOLLOW-UP CARE</small></div>
+      <div>回診追蹤管理<small>FOLLOW-UP CARE</small></div>
     </div>
     <button class="logout-button" id="logoutButton" type="button" hidden>登出</button>
   </header>
@@ -168,6 +169,13 @@
         <div><label for="loginEmail">電子郵件</label><input id="loginEmail" type="email" autocomplete="username" required></div>
         <div><label for="loginPassword">密碼</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
         <button class="button-secondary" type="submit">登入</button>
+        <button class="text-button" id="forgotPasswordButton" type="button">忘記密碼？寄送重設連結</button>
+      </form>
+      <form class="auth-form" id="passwordRecoveryForm" hidden>
+        <p>請設定新密碼。</p>
+        <div><label for="newPassword">新密碼</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div><label for="confirmNewPassword">再次輸入新密碼</label><input id="confirmNewPassword" type="password" autocomplete="new-password" minlength="6" required></div>
+        <button class="button-secondary" type="submit">更新密碼</button>
       </form>
     </section>
     <section class="intro">

@@ -85,10 +85,24 @@ async function refreshRecords() {
 
 const authGate = document.getElementById("authGate");
 const loginForm = document.getElementById("loginForm");
+const forgotPasswordButton = document.getElementById("forgotPasswordButton");
+const passwordRecoveryForm = document.getElementById("passwordRecoveryForm");
 const logoutButton = document.getElementById("logoutButton");
 const securedView = document.getElementById("formView") || document.getElementById("dashboardView");
+let recoveringPassword = false;
 
 async function updateAuthView() {
+  if (recoveringPassword) {
+    if (authGate) authGate.hidden = false;
+    if (loginForm) loginForm.hidden = true;
+    if (passwordRecoveryForm) passwordRecoveryForm.hidden = false;
+    if (securedView) securedView.hidden = true;
+    if (logoutButton) logoutButton.hidden = true;
+    return;
+  }
+
+  if (loginForm) loginForm.hidden = false;
+  if (passwordRecoveryForm) passwordRecoveryForm.hidden = true;
   if (currentUser && authorizedUserId !== currentUser.id) {
     const { data, error } = await supabaseClient
       .from("followup_staff")
@@ -139,9 +153,15 @@ function initializeCloudAuth() {
   }
 
   supabaseClient = window.supabase.createClient(config.url, config.anonKey);
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
+  supabaseClient.auth.onAuthStateChange((event, session) => {
     window.setTimeout(() => {
       currentUser = session?.user || null;
+      if (event === "PASSWORD_RECOVERY") {
+        recoveringPassword = true;
+        updateAuthView();
+        return;
+      }
+      if (event === "SIGNED_OUT") recoveringPassword = false;
       if (!currentUser) authorizedUserId = null;
       updateAuthView();
     }, 0);
@@ -168,6 +188,51 @@ if (loginForm) {
     });
     button.disabled = false;
     if (error) showToast("登入失敗，請確認帳號與密碼。");
+  });
+}
+
+if (forgotPasswordButton) {
+  forgotPasswordButton.addEventListener("click", async () => {
+    const email = document.getElementById("loginEmail").value.trim();
+    if (!email) {
+      showToast("請先輸入登入電子郵件。");
+      document.getElementById("loginEmail").focus();
+      return;
+    }
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}${window.location.pathname}`
+    });
+    if (error) {
+      console.error("Unable to request a password reset.", error);
+      showToast("無法寄送重設信，請稍後再試。");
+      return;
+    }
+    showToast("若此帳號存在，密碼重設信將寄到該電子郵件。");
+  });
+}
+
+if (passwordRecoveryForm) {
+  passwordRecoveryForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!passwordRecoveryForm.reportValidity()) return;
+    const password = document.getElementById("newPassword").value;
+    const confirmation = document.getElementById("confirmNewPassword").value;
+    if (password !== confirmation) {
+      showToast("兩次輸入的密碼不一致。");
+      return;
+    }
+    const button = passwordRecoveryForm.querySelector("button[type=submit]");
+    button.disabled = true;
+    const { error } = await supabaseClient.auth.updateUser({ password });
+    button.disabled = false;
+    if (error) {
+      console.error("Unable to update the password.", error);
+      showToast("密碼更新失敗，請重新寄送重設信。");
+      return;
+    }
+    recoveringPassword = false;
+    await supabaseClient.auth.signOut();
+    showToast("密碼已更新，請使用新密碼登入。");
   });
 }
 
