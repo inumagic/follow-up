@@ -202,7 +202,7 @@ if (forgotPasswordButton) {
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
     if (error) {
       console.error("Unable to request a password reset.", error);
-      showToast("無法寄送重設信，請稍後再試。");
+      showToast(`重設信寄送失敗：${error.message}`);
       return;
     }
     showToast("若此帳號存在，密碼重設信將寄到該電子郵件。");
