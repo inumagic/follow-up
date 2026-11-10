@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f7f5">
+  <title>魔法牙醫｜回診追蹤</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #20302b;
+      --muted: #718078;
+      --green: #237b61;
+      --green-dark: #175c49;
+      --green-soft: #e8f3ed;
+      --line: #e5ebe7;
+      --surface: #fff;
+      --page: #f5f7f5;
+      --amber: #a76b16;
+      --amber-soft: #fff5e3;
+      --red: #a54242;
+      --shadow: 0 12px 32px rgb(34 57 47 / 6%);
+      font-family: "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--page);
+      min-width: 320px;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .topbar {
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 clamp(20px, 5vw, 72px);
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 750; }
+    .brand-mark {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      color: white;
+      background: var(--green);
+      border-radius: 12px;
+      font-size: 20px;
+    }
+    .brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; margin-top: 2px; }
+
+    .top-note { color: var(--muted); font-size: 13px; }
+    .page { width: min(1120px, calc(100% - 40px)); margin: 34px auto 60px; }
+
+    .intro { margin-bottom: 24px; }
+    .eyebrow {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 8px 0; font-size: clamp(25px, 4vw, 34px); letter-spacing: -.03em; }
+    .intro p { margin: 0; color: var(--muted); line-height: 1.7; }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      width: fit-content;
+      padding: 5px;
+      margin: 24px 0 20px;
+      background: #e9eeeb;
+      border-radius: 12px;
+    }
+    .tab {
+      display: block;
+      border: 0;
+      border-radius: 9px;
+      padding: 10px 17px;
+      color: #64736b;
+      background: transparent;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .tab.active { color: var(--green-dark); background: white; box-shadow: 0 2px 6px rgb(20 45 32 / 8%); }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .form-panel { max-width: 790px; padding: clamp(22px, 4vw, 38px); margin: 0 auto; }
+    .panel-heading { margin-bottom: 25px; }
+    .panel-heading h2 { margin: 0 0 7px; font-size: 21px; }
+    .panel-heading p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 19px 16px; }
+    .field { min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    label, .field-label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 700; }
+    .required { color: var(--red); }
+    input, select, textarea {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      color: var(--ink);
+      background: white;
+      border: 1px solid #dce4df;
+      border-radius: 9px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #75ad97; box-shadow: 0 0 0 3px rgb(35 123 97 / 11%); }
+    input::placeholder, textarea::placeholder { color: #a2ada7; }
+    textarea { min-height: 88px; resize: vertical; }
+    .hint { margin-top: 6px; color: var(--muted); font-size: 12px; }
+
+    .treatments { display: flex; flex-wrap: wrap; gap: 8px; }
+    .check-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 38px;
+      padding: 7px 11px;
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      color: #526158;
+      font-size: 13px;
+      font-weight: 550;
+      cursor: pointer;
+    }
+    .check-option input { width: 15px; min-height: 15px; margin: 0; accent-color: var(--green); }
+    .treatment-picker { border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+    .treatment-picker summary {
+      padding: 12px 14px;
+      color: var(--green-dark);
+      border-radius: 10px;
+      background: #f7faf8;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      list-style-position: inside;
+    }
+    .treatment-picker[open] summary { border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0; }
+    .treatment-picker-content { padding: 12px; }
+
+    .consent {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      padding: 13px;
+      color: #58675f;
+      background: #f7f9f7;
+      border-radius: 9px;
+      font-size: 12px;
+      line-height: 1.65;
+    }
+    .consent input { flex: 0 0 16px; width: 16px; min-height: 16px; margin: 2px 0 0; accent-color: var(--green); }
+    .form-actions { display: flex; align-items: center; gap: 14px; margin-top: 23px; }
+    .primary {
+      min-height: 44px;
+      padding: 0 20px;
+      color: white;
+      background: var(--green);
+      border: 0;
+      border-radius: 9px;
+      font-weight: 700;
+    }
+    .primary:hover { background: var(--green-dark); }
+    .privacy-note { color: var(--muted); font-size: 12px; }
+
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 3;
+      max-width: min(380px, calc(100% - 44px));
+      padding: 13px 16px;
+      color: white;
+      background: #253b31;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+      font-size: 13px;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: .2s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 700px) {
+      .topbar { height: 62px; padding: 0 18px; }
+      .top-note { display: none; }
+      .page { width: min(100% - 26px, 600px); margin-top: 25px; }
+      .form-grid { grid-template-columns: 1fr; gap: 16px; }
+      .field.full { grid-column: auto; }
+      .form-actions { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">牙</div>
+      <div>回診追蹤<small>FOLLOW-UP CARE</small></div>
+    </div>
+    <div class="top-note">回診追蹤管理</div>
+  </header>
+
+  <main class="page">
+    <section class="intro">
+      <div class="eyebrow">Patient follow-up</div>
+      <h1>魔法牙醫｜患者回診追蹤表</h1>
+      <p>填寫回診資料，並由內部管理頁追蹤聯絡進度與回診安排。</p>
+    </section>
+
+    <section class="panel form-panel" id="formView">
+      <div class="panel-heading">
+        <h2>新增回診紀錄</h2>
+        <p>請填寫患者資料、本次看診及下次回診安排。<span class="required">*</span> 為必填欄位。</p>
+      </div>
+
+      <form id="followupForm">
+        <div class="form-grid">
+          <div class="field">
+            <label for="patientName">患者姓名 <span class="required">*</span></label>
+            <input id="patientName" name="patientName" autocomplete="name" maxlength="80" required placeholder="請輸入患者姓名">
+          </div>
+          <div class="field">
+            <label for="birthDate">出生日期 <span class="required">*</span></label>
+            <input id="birthDate" name="birthDate" type="date" required>
+          </div>
+          <div class="field">
+            <label for="phone">聯絡電話 <span class="required">*</span></label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="30" required placeholder="例如：0912-345-678">
+          </div>
+          <div class="field">
+            <label for="visitDate">看診日期 <span class="required">*</span></label>
+            <input id="visitDate" name="visitDate" type="date" required>
+          </div>
+          <div class="field full">
+            <span class="field-label">當天療程 <span class="required">*</span></span>
+            <details class="treatment-picker">
+              <summary id="todayTreatmentSummary">點此選擇當天療程</summary>
+              <div class="treatment-picker-content"><div class="treatments" id="todayTreatments"></div></div>
+            </details>
+            <div class="hint">請選擇本次看診實際進行的療程項目。</div>
+          </div>
+          <div class="field full">
+            <label for="visitContent">備註</label>
+            <textarea id="visitContent" name="visitContent" maxlength="1000" placeholder="請簡要記錄本次看診內容"></textarea>
+          </div>
+          <div class="field full">
+            <span class="field-label">下次療程項目 <span class="required">*</span></span>
+            <details class="treatment-picker">
+              <summary id="nextTreatmentSummary">點此選擇下次療程</summary>
+              <div class="treatment-picker-content"><div class="treatments" id="nextTreatments"></div></div>
+            </details>
+            <div class="hint">請至少選擇一項下次療程。</div>
+          </div>
+          <div class="field">
+            <label for="interval">回診間隔 <span class="required">*</span></label>
+            <select id="interval" name="interval" required>
+              <option value="30">30 天</option>
+              <option value="60">60 天</option>
+              <option value="90">90 天</option>
+              <option value="180">180 天</option>
+              <option value="custom">自訂天數</option>
+            </select>
+          </div>
+          <div class="field" id="customDaysField" hidden>
+            <label for="customDays">自訂天數 <span class="required">*</span></label>
+            <input id="customDays" name="customDays" type="number" min="1" max="1095" step="1" placeholder="輸入 1 至 1095 天">
+          </div>
+          <div class="field">
+            <label for="dueTime">預計回診時間</label>
+            <input id="dueTime" name="dueTime" type="time">
+            <div class="hint">未填寫時間時，行事曆會建立全天事件。</div>
+          </div>
+          <div class="field">
+            <label for="assistant">填表助理 <span class="required">*</span></label>
+            <input id="assistant" name="assistant" maxlength="80" required placeholder="請輸入助理姓名">
+          </div>
+          <div class="field full">
+            <label class="consent">
+              <input id="consent" name="consent" type="checkbox" required>
+              <span>我已向患者說明本表單的資料用途，並確認已取得必要同意；資料僅供診所內部回診追蹤使用。</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="primary" type="submit">儲存回診資料</button>
+          <span class="privacy-note">請勿在公共或共用裝置上輸入真實患者資料。</span>
+        </div>
+      </form>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

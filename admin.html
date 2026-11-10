@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f7f5">
+  <title>內部管理｜回診小管家</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #20302b;
+      --muted: #718078;
+      --green: #237b61;
+      --green-dark: #175c49;
+      --green-soft: #e8f3ed;
+      --line: #e5ebe7;
+      --surface: #fff;
+      --page: #f5f7f5;
+      --amber-soft: #fff5e3;
+      --shadow: 0 12px 32px rgb(34 57 47 / 6%);
+      font-family: "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; color: var(--ink); background: var(--page); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .topbar {
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 clamp(20px, 5vw, 72px);
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 750; }
+    .brand-mark {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      color: white;
+      background: var(--green);
+      border-radius: 12px;
+      font-size: 20px;
+    }
+    .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
+    .top-note { color: var(--muted); font-size: 13px; }
+    .page { width: min(1120px, calc(100% - 40px)); margin: 34px auto 60px; }
+    .intro { margin-bottom: 24px; }
+    .eyebrow { color: var(--green); font-size: 12px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 8px 0; font-size: clamp(25px, 4vw, 34px); letter-spacing: -.03em; }
+    .intro p { margin: 0; color: var(--muted); line-height: 1.7; }
+    .tabs { display: flex; gap: 6px; width: fit-content; padding: 5px; margin: 24px 0 20px; background: #e9eeeb; border-radius: 12px; }
+    .tab { display: block; padding: 10px 17px; color: #64736b; border-radius: 9px; text-decoration: none; font-weight: 650; }
+    .tab.active { color: var(--green-dark); background: white; box-shadow: 0 2px 6px rgb(20 45 32 / 8%); }
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+    .dashboard-top { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .dashboard-top h2 { margin: 0 0 5px; font-size: 21px; }
+    .dashboard-top p { margin: 0; color: var(--muted); font-size: 13px; }
+    .button-secondary {
+      min-height: 40px;
+      padding: 0 13px;
+      color: var(--green-dark);
+      background: white;
+      border: 1px solid #cddbd2;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .button-secondary:hover { background: var(--green-soft); }
+    .notice {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 13px 15px;
+      margin-bottom: 17px;
+      color: #775921;
+      background: var(--amber-soft);
+      border: 1px solid #f4e3bf;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .notice strong { color: #6a4b16; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; margin-bottom: 17px; }
+    .stat { padding: 17px; }
+    .stat-title { color: var(--muted); font-size: 12px; font-weight: 650; }
+    .stat-number { margin-top: 8px; font-size: 27px; font-weight: 760; letter-spacing: -.03em; }
+    .stat-sub { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .table-panel { overflow: hidden; }
+    .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px; border-bottom: 1px solid var(--line); }
+    .table-toolbar strong { font-size: 14px; }
+    .filters { display: flex; gap: 8px; }
+    input, select { min-height: 37px; padding: 7px 10px; color: var(--ink); background: white; border: 1px solid #dce4df; border-radius: 8px; outline: none; }
+    input:focus, select:focus { border-color: #75ad97; box-shadow: 0 0 0 3px rgb(35 123 97 / 11%); }
+    .filters input { width: 190px; }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; text-align: left; }
+    th { padding: 11px 14px; color: #758179; background: #fafbfa; font-size: 11px; font-weight: 700; }
+    td { padding: 13px 14px; border-top: 1px solid #edf0ee; font-size: 12px; }
+    .patient-name { font-weight: 700; }
+    .subtext { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .status-select { min-height: 32px; width: auto; padding: 5px 7px; font-size: 11px; }
+    .calendar-link {
+      display: inline-block;
+      padding: 7px 9px;
+      color: var(--green-dark);
+      background: var(--green-soft);
+      border-radius: 7px;
+      font-size: 11px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .calendar-link:hover { background: #d7eadf; }
+    .empty { padding: 34px; color: var(--muted); text-align: center; font-size: 13px; }
+    .footer-note { margin: 13px 2px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 3;
+      max-width: min(380px, calc(100% - 44px));
+      padding: 13px 16px;
+      color: white;
+      background: #253b31;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+      font-size: 13px;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: .2s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 700px) {
+      .topbar { height: 62px; padding: 0 18px; }
+      .top-note { display: none; }
+      .page { width: min(100% - 26px, 600px); margin-top: 25px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dashboard-top, .table-toolbar { align-items: flex-start; flex-direction: column; }
+      .filters { width: 100%; }
+      .filters input { flex: 1; min-width: 0; }
+      .filters select { max-width: 130px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">＋</div>
+      <div>回診小管家<small>FOLLOW-UP CARE</small></div>
+    </div>
+    <div class="top-note">內部管理介面</div>
+  </header>
+
+  <main class="page">
+    <section class="intro">
+      <div class="eyebrow">Staff dashboard</div>
+      <h1>回診追蹤管理</h1>
+      <p>檢視回診安排、追蹤聯絡進度與匯出名單。</p>
+    </section>
+
+    <nav class="tabs" aria-label="頁面切換">
+      <a class="tab" href="index.html">回診表單</a>
+      <a class="tab active" href="admin.html" aria-current="page">內部管理</a>
+    </nav>
+
+    <section class="dashboard">
+      <div class="dashboard-top">
+        <div>
+          <h2>回診追蹤總覽</h2>
+          <p>查看回診安排與聯絡進度。</p>
+        </div>
+        <button class="button-secondary" id="exportButton" type="button">匯出 CSV</button>
+      </div>
+
+      <div class="notice">
+        <span aria-hidden="true">ⓘ</span>
+        <span><strong>原型與行事曆提醒：</strong>資料只保存在此瀏覽器，不會同步至其他裝置或使用者。按每筆資料的「加入 Google 行事曆」會開啟預填行程，需在 Google Calendar 登入並自行儲存；提醒內容會包含患者姓名、出生日期、電話與下次療程。是否跳通知依你的行事曆預設提醒設定。請確認 Google 帳戶及行事曆適合存放這些資料。</span>
+      </div>
+
+      <div class="stats">
+        <article class="panel stat">
+          <div class="stat-title">追蹤紀錄</div>
+          <div class="stat-number" id="totalCount">0</div>
+          <div class="stat-sub">目前瀏覽器內的資料</div>
+        </article>
+        <article class="panel stat">
+          <div class="stat-title">待聯絡</div>
+          <div class="stat-number" id="pendingCount">0</div>
+          <div class="stat-sub">尚未完成聯絡</div>
+        </article>
+        <article class="panel stat">
+          <div class="stat-title">已預約</div>
+          <div class="stat-number" id="bookedCount">0</div>
+          <div class="stat-sub">已確認回診安排</div>
+        </article>
+        <article class="panel stat">
+          <div class="stat-title">本月預計回診</div>
+          <div class="stat-number" id="monthCount">0</div>
+          <div class="stat-sub">依預計回診日期計算</div>
+        </article>
+      </div>
+
+      <section class="panel table-panel">
+        <div class="table-toolbar">
+          <strong>回診名單</strong>
+          <div class="filters">
+            <input id="searchInput" type="search" placeholder="搜尋姓名或電話" aria-label="搜尋姓名或電話">
+            <select id="statusFilter" aria-label="依狀態篩選">
+              <option value="">全部狀態</option>
+              <option value="待聯絡">待聯絡</option>
+              <option value="已聯絡">已聯絡</option>
+              <option value="已預約">已預約</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">編號</th>
+                <th>患者</th>
+                <th>聯絡電話</th>
+                <th>看診日期</th>
+                <th>預計回診</th>
+                <th>當天療程</th>
+                <th>下次療程</th>
+                <th>填表助理</th>
+                <th>狀態</th>
+                <th>行事曆</th>
+              </tr>
+            </thead>
+            <tbody id="recordsBody"></tbody>
+          </table>
+          <div class="empty" id="emptyState">目前沒有回診紀錄，請從「回診表單」新增資料。</div>
+        </div>
+      </section>
+      <p class="footer-note">本頁為純前端原型，並無登入或存取權限控管。正式使用時需改用有登入驗證、權限控管、加密、備份與稽核紀錄的伺服器資料庫。</p>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
