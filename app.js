@@ -1,6 +1,5 @@
 "use strict";
 
-const STORAGE_KEY = "followup-care-records";
 const form = document.getElementById("followupForm");
 const intervalSelect = document.getElementById("interval");
 const customDaysField = document.getElementById("customDaysField");
@@ -16,6 +15,9 @@ const todayTreatmentSummary = document.getElementById("todayTreatmentSummary");
 const nextTreatmentSummary = document.getElementById("nextTreatmentSummary");
 let records = [];
 let toastTimer;
+let currentUser = null;
+let authorizedUserId = null;
+let supabaseClient = null;
 const treatmentOptions = Array.from({ length: 20 }, (_, index) => `療程${index + 1}`);
 
 function showToast(message) {
@@ -26,33 +28,155 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => toast.classList.remove("show"), 3200);
 }
 
-function loadRecords() {
+function fromDatabaseRecord(row) {
+  return {
+    id: row.id,
+    patientName: row.patient_name,
+    birthDate: row.birth_date,
+    phone: row.phone,
+    visitDate: row.visit_date,
+    visitContent: row.visit_content || "",
+    todayTreatments: row.today_treatments || [],
+    treatments: row.treatments || [],
+    intervalDays: row.interval_days,
+    dueDate: row.due_date,
+    dueTime: row.due_time || "",
+    assistant: row.assistant,
+    status: row.status
+  };
+}
+
+function toDatabaseRecord(record) {
+  return {
+    patient_name: record.patientName,
+    birth_date: record.birthDate,
+    phone: record.phone,
+    visit_date: record.visitDate,
+    visit_content: record.visitContent || "",
+    today_treatments: record.todayTreatments || [],
+    treatments: record.treatments || [],
+    interval_days: record.intervalDays,
+    due_date: record.dueDate,
+    due_time: record.dueTime || null,
+    assistant: record.assistant,
+    status: record.status,
+    created_by: currentUser.id
+  };
+}
+
+async function loadRecords() {
+  const { data, error } = await supabaseClient
+    .from("followup_records")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  records = data.map(fromDatabaseRecord);
+}
+
+async function refreshRecords() {
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) throw new Error("Stored records must be an array.");
-    return parsed;
+    await loadRecords();
+    if (recordsBody) renderDashboard();
   } catch (error) {
-    showToast("讀取本機資料失敗，請確認瀏覽器儲存空間可用。");
-    console.error("Unable to load follow-up records.", error);
-    return [];
+    console.error("Unable to load shared follow-up records.", error);
+    showToast("讀取共用名單失敗，請確認資料表與登入權限設定。");
   }
 }
 
-function saveRecords(nextRecords) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
-    records = nextRecords;
-    return true;
-  } catch (error) {
-    showToast("資料未能儲存，請確認瀏覽器儲存空間可用後重試。");
-    console.error("Unable to save follow-up records.", error);
-    return false;
+const authGate = document.getElementById("authGate");
+const loginForm = document.getElementById("loginForm");
+const logoutButton = document.getElementById("logoutButton");
+const securedView = document.getElementById("formView") || document.getElementById("dashboardView");
+
+async function updateAuthView() {
+  if (currentUser && authorizedUserId !== currentUser.id) {
+    const { data, error } = await supabaseClient
+      .from("followup_staff")
+      .select("user_id")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+    if (error) {
+      if (authGate) authGate.hidden = false;
+      if (securedView) securedView.hidden = true;
+      showToast("無法驗證人員權限，請確認已執行最新的資料庫設定。");
+      return;
+    }
+    if (!data) {
+      currentUser = null;
+      if (authGate) authGate.hidden = false;
+      if (securedView) securedView.hidden = true;
+      showToast("此帳號尚未加入診所人員白名單。");
+      await supabaseClient.auth.signOut();
+      return;
+    }
+    authorizedUserId = currentUser.id;
   }
+
+  if (!currentUser) authorizedUserId = null;
+  const signedIn = Boolean(currentUser && authorizedUserId === currentUser.id);
+  if (authGate) authGate.hidden = signedIn;
+  if (securedView) securedView.hidden = !signedIn;
+  if (logoutButton) logoutButton.hidden = !signedIn;
+  updateLocalImportButton();
+  if (signedIn && recordsBody) refreshRecords();
 }
 
-records = loadRecords();
+function initializeCloudAuth() {
+  const config = window.FOLLOWUP_SUPABASE_CONFIG;
+  const configured = config &&
+    /^https:\/\//.test(config.url) &&
+    config.anonKey &&
+    !config.url.includes("PASTE_") &&
+    !config.anonKey.includes("PASTE_");
+
+  if (!configured || !window.supabase?.createClient) {
+    if (authGate) authGate.hidden = false;
+    if (securedView) securedView.hidden = true;
+    const message = authGate?.querySelector("p");
+    if (message) message.textContent = "請先設定 supabase-config.js，並依設定指南建立資料表與登入帳號。";
+    if (loginForm) loginForm.hidden = true;
+    return;
+  }
+
+  supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    window.setTimeout(() => {
+      currentUser = session?.user || null;
+      if (!currentUser) authorizedUserId = null;
+      updateAuthView();
+    }, 0);
+  });
+
+  supabaseClient.auth.getSession().then(({ data, error }) => {
+    if (error) {
+      showToast("無法確認登入狀態，請重新整理頁面。");
+      return;
+    }
+    currentUser = data.session?.user || null;
+    updateAuthView();
+  });
+}
+
+if (loginForm) {
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = loginForm.querySelector("button[type=submit]");
+    button.disabled = true;
+    const { error } = await supabaseClient.auth.signInWithPassword({
+      email: document.getElementById("loginEmail").value.trim(),
+      password: document.getElementById("loginPassword").value
+    });
+    button.disabled = false;
+    if (error) showToast("登入失敗，請確認帳號與密碼。");
+  });
+}
+
+if (logoutButton) {
+  logoutButton.addEventListener("click", async () => {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) showToast("登出失敗，請稍後再試。");
+  });
+}
 
 function populateTreatmentOptions(container, name) {
   if (!container) return;
@@ -224,7 +348,7 @@ if (intervalSelect && customDaysField && customDaysInput) {
 }
 
 if (form) {
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
 
@@ -253,10 +377,7 @@ if (form) {
       return;
     }
 
-    const nextRecords = [{
-      id: window.crypto && typeof window.crypto.randomUUID === "function"
-        ? window.crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    const record = {
       patientName: String(data.get("patientName")).trim(),
       birthDate,
       phone: String(data.get("phone")).trim(),
@@ -269,19 +390,30 @@ if (form) {
       dueTime: String(data.get("dueTime") || ""),
       assistant: String(data.get("assistant")).trim(),
       status: "待聯絡"
-    }, ...records];
+    };
 
-    if (!saveRecords(nextRecords)) return;
+    const submitButton = form.querySelector("button[type=submit]");
+    submitButton.disabled = true;
+    const { error } = await supabaseClient
+      .from("followup_records")
+      .insert(toDatabaseRecord(record));
+    submitButton.disabled = false;
+    if (error) {
+      console.error("Unable to save follow-up record.", error);
+      showToast("資料未能儲存至共用名單，請檢查網路後重試。");
+      return;
+    }
     form.reset();
     customDaysField.hidden = true;
     customDaysInput.required = false;
     updateNextTreatmentSummary();
-    showToast("資料已儲存在此瀏覽器，請由上方「內部管理」查看。");
+    updateTodayTreatmentSummary();
+    showToast("資料已儲存至共用名單。");
   });
 }
 
 if (recordsBody) {
-  recordsBody.addEventListener("change", (event) => {
+  recordsBody.addEventListener("change", async (event) => {
     const select = event.target.closest(".status-select");
     if (!select) return;
     const record = records.find((item) => item.id === select.dataset.recordId);
@@ -289,11 +421,19 @@ if (recordsBody) {
       showToast("找不到這筆資料，請重新整理頁面。");
       return;
     }
-    const nextRecords = records.map((item) =>
-      item.id === record.id ? { ...item, status: select.value } : item
-    );
-    if (!saveRecords(nextRecords)) return;
-    renderDashboard();
+    select.disabled = true;
+    const { error } = await supabaseClient
+      .from("followup_records")
+      .update({ status: select.value })
+      .eq("id", record.id);
+    select.disabled = false;
+    if (error) {
+      console.error("Unable to update follow-up status.", error);
+      showToast("追蹤狀態更新失敗，請重試。");
+      select.value = record.status;
+      return;
+    }
+    await refreshRecords();
     showToast("追蹤狀態已更新。");
   });
 }
@@ -341,4 +481,67 @@ if (exportButton) {
   });
 }
 
-if (recordsBody) renderDashboard();
+const importLocalButton = document.getElementById("importLocalButton");
+const LEGACY_STORAGE_KEY = "followup-care-records";
+const LEGACY_MIGRATION_KEY = "followup-care-records-migrated-v1";
+
+function readLegacyRecords() {
+  try {
+    const saved = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Unable to read local follow-up records.", error);
+    return [];
+  }
+}
+
+function updateLocalImportButton() {
+  if (!importLocalButton || !currentUser) return;
+  let alreadyMigrated = false;
+  try {
+    alreadyMigrated = window.localStorage.getItem(LEGACY_MIGRATION_KEY) === "true";
+  } catch (error) {
+    console.error("Unable to check local migration status.", error);
+  }
+  importLocalButton.hidden = alreadyMigrated || readLegacyRecords().length === 0;
+}
+
+if (importLocalButton) {
+  importLocalButton.addEventListener("click", async () => {
+    const oldRecords = readLegacyRecords();
+    if (!oldRecords.length) {
+      updateLocalImportButton();
+      return;
+    }
+    const confirmed = window.confirm(`將此裝置上的 ${oldRecords.length} 筆舊紀錄匯入共用名單。舊資料會保留在此裝置。要繼續嗎？`);
+    if (!confirmed) return;
+
+    importLocalButton.disabled = true;
+    const rows = oldRecords.map((record) => ({
+      ...toDatabaseRecord(record),
+      legacy_id: String(record.id || window.crypto.randomUUID())
+    }));
+    const { error } = await supabaseClient
+      .from("followup_records")
+      .upsert(rows, { onConflict: "legacy_id", ignoreDuplicates: true });
+    importLocalButton.disabled = false;
+    if (error) {
+      console.error("Unable to import local follow-up records.", error);
+      showToast("舊資料匯入失敗，請確認資料表設定後重試。");
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(LEGACY_MIGRATION_KEY, "true");
+    } catch (storageError) {
+      console.error("Unable to mark local migration status.", storageError);
+    }
+    updateLocalImportButton();
+    await refreshRecords();
+    showToast("此裝置的舊紀錄已匯入共用名單。");
+  });
+}
+
+initializeCloudAuth();
+

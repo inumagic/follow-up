@@ -54,7 +54,14 @@
     .tab.active { color: var(--green-dark); background: white; box-shadow: 0 2px 6px rgb(20 45 32 / 8%); }
     .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
     .dashboard-top { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .dashboard-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .dashboard-top h2 { margin: 0 0 5px; font-size: 21px; }
+    .auth-panel { max-width: 480px; padding: 26px; margin: 0 auto 22px; }
+    .auth-panel h2 { margin: 0 0 7px; font-size: 20px; }
+    .auth-panel p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .auth-form { display: grid; gap: 14px; }
+    .auth-form input { width: 100%; margin-top: 6px; }
+    .logout-button { padding: 8px 12px; color: var(--green-dark); background: white; border: 1px solid #cddbd2; border-radius: 8px; font-size: 12px; font-weight: 700; }
     .dashboard-top p { margin: 0; color: var(--muted); font-size: 13px; }
     .button-secondary {
       min-height: 40px;
@@ -137,6 +144,7 @@
       .page { width: min(100% - 26px, 600px); margin-top: 25px; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .dashboard-top, .table-toolbar { align-items: flex-start; flex-direction: column; }
+      .dashboard-actions { width: 100%; }
       .filters { width: 100%; }
       .filters input { flex: 1; min-width: 0; }
       .filters select { max-width: 130px; }
@@ -147,12 +155,21 @@
   <header class="topbar">
     <div class="brand">
       <img class="brand-mark" src="brand-logo.png" alt="" aria-hidden="true">
-      <div>回診追蹤內部管理<small>FOLLOW-UP CARE</small></div>
+      <div>回診小管家<small>FOLLOW-UP CARE</small></div>
     </div>
-    <div class="top-note">內部管理介面</div>
+    <button class="logout-button" id="logoutButton" type="button" hidden>登出</button>
   </header>
 
   <main class="page">
+    <section class="panel auth-panel" id="authGate" hidden>
+      <h2>登入回診追蹤管理</h2>
+      <p>請使用診所人員帳號登入以查看共用名單與統計。</p>
+      <form class="auth-form" id="loginForm">
+        <div><label for="loginEmail">電子郵件</label><input id="loginEmail" type="email" autocomplete="username" required></div>
+        <div><label for="loginPassword">密碼</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
+        <button class="button-secondary" type="submit">登入</button>
+      </form>
+    </section>
     <section class="intro">
       <div class="eyebrow">Staff dashboard</div>
       <h1>回診追蹤管理</h1>
@@ -164,25 +181,28 @@
       <a class="tab active" href="admin.html" aria-current="page">內部管理</a>
     </nav>
 
-    <section class="dashboard">
+    <section class="dashboard" id="dashboardView" hidden>
       <div class="dashboard-top">
         <div>
           <h2>回診追蹤總覽</h2>
           <p>查看回診安排與聯絡進度。</p>
         </div>
-        <button class="button-secondary" id="exportButton" type="button">匯出 CSV</button>
+        <div class="dashboard-actions">
+          <button class="button-secondary" id="importLocalButton" type="button" hidden>匯入此裝置舊資料</button>
+          <button class="button-secondary" id="exportButton" type="button">匯出 CSV</button>
+        </div>
       </div>
 
       <div class="notice">
         <span aria-hidden="true">ⓘ</span>
-        <span><strong>原型與行事曆提醒：</strong>資料只保存在此瀏覽器，不會同步至其他裝置或使用者。按每筆資料的「加入 Google 行事曆」會開啟預填行程，需在 Google Calendar 登入並自行儲存；提醒內容會包含患者姓名、出生日期、電話與下次療程。是否跳通知依你的行事曆預設提醒設定。請確認 Google 帳戶及行事曆適合存放這些資料。</span>
+        <span><strong>共用資料與行事曆提醒：</strong>登入後可查看雲端共用名單。按每筆資料的「加入 Google 行事曆」會開啟預填行程，需登入 Google Calendar 並自行儲存；提醒內容會包含患者姓名、出生日期、電話與下次療程。請確認 Google 帳戶及行事曆適合存放這些資料。</span>
       </div>
 
       <div class="stats">
         <article class="panel stat">
           <div class="stat-title">追蹤紀錄</div>
           <div class="stat-number" id="totalCount">0</div>
-          <div class="stat-sub">目前瀏覽器內的資料</div>
+          <div class="stat-sub">所有裝置共用資料</div>
         </article>
         <article class="panel stat">
           <div class="stat-title">待聯絡</div>
@@ -235,10 +255,13 @@
           <div class="empty" id="emptyState">目前沒有回診紀錄，請從「回診表單」新增資料。</div>
         </div>
       </section>
-      <p class="footer-note">本頁為純前端原型，並無登入或存取權限控管。正式使用時需改用有登入驗證、權限控管、加密、備份與稽核紀錄的伺服器資料庫。</p>
+      <p class="footer-note">回診資料存放於 Supabase，需登入後依資料列權限政策存取。請限制人員帳號、啟用資料庫備份，並依診所個資管理規範使用。</p>
     </section>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
+
