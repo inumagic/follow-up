@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f5f7f5">
+  <link rel="icon" type="image/png" href="brand-logo.png">
   <title>魔法牙醫｜回診追蹤</title>
   <style>
     :root {
@@ -47,14 +48,10 @@
 
     .brand { display: flex; align-items: center; gap: 12px; font-weight: 750; }
     .brand-mark {
-      display: grid;
+      display: block;
       width: 38px;
       height: 38px;
-      place-items: center;
-      color: white;
-      background: var(--green);
-      border-radius: 12px;
-      font-size: 20px;
+      object-fit: contain;
     }
     .brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; margin-top: 2px; }
 
@@ -213,7 +210,7 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-mark" aria-hidden="true">牙</div>
+      <img class="brand-mark" src="brand-logo.png" alt="" aria-hidden="true">
       <div>回診追蹤<small>FOLLOW-UP CARE</small></div>
     </div>
     <div class="top-note">回診追蹤管理</div>
@@ -293,16 +290,10 @@
             <label for="assistant">填表助理 <span class="required">*</span></label>
             <input id="assistant" name="assistant" maxlength="80" required placeholder="請輸入助理姓名">
           </div>
-          <div class="field full">
-            <label class="consent">
-              <input id="consent" name="consent" type="checkbox" required>
-              <span>我已向患者說明本表單的資料用途，並確認已取得必要同意；資料僅供診所內部回診追蹤使用。</span>
-            </label>
-          </div>
+          
         </div>
         <div class="form-actions">
           <button class="primary" type="submit">儲存回診資料</button>
-          <span class="privacy-note">請勿在公共或共用裝置上輸入真實患者資料。</span>
         </div>
       </form>
     </section>
