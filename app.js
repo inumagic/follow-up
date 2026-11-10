@@ -199,9 +199,7 @@ if (forgotPasswordButton) {
       document.getElementById("loginEmail").focus();
       return;
     }
-    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}${window.location.pathname}`
-    });
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
     if (error) {
       console.error("Unable to request a password reset.", error);
       showToast("無法寄送重設信，請稍後再試。");
