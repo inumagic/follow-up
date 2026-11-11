@@ -8,6 +8,8 @@ const recordsBody = document.getElementById("recordsBody");
 const emptyState = document.getElementById("emptyState");
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
+const todayTreatmentFilter = document.getElementById("todayTreatmentFilter");
+const nextTreatmentFilter = document.getElementById("nextTreatmentFilter");
 const toast = document.getElementById("toast");
 const todayTreatmentsContainer = document.getElementById("todayTreatments");
 const nextTreatmentsContainer = document.getElementById("nextTreatments");
@@ -111,8 +113,18 @@ function populateTreatmentOptions(container, name) {
   }).join("");
 }
 
+function populateTreatmentFilterOptions(select, label) {
+  if (!select) return;
+  select.innerHTML = [
+    `<option value="">${label}</option>`,
+    ...treatmentOptions.map((treatment) => `<option value="${treatment}">${treatment}</option>`)
+  ].join("");
+}
+
 populateTreatmentOptions(todayTreatmentsContainer, "todayTreatment");
 populateTreatmentOptions(nextTreatmentsContainer, "nextTreatment");
+populateTreatmentFilterOptions(todayTreatmentFilter, "當天療程分類（全部）");
+populateTreatmentFilterOptions(nextTreatmentFilter, "下次療程分類（全部）");
 
 function updateNextTreatmentSummary() {
   if (!nextTreatmentsContainer || !nextTreatmentSummary) return;
@@ -230,12 +242,16 @@ function renderDashboard() {
 
   const query = searchInput.value.trim().toLocaleLowerCase();
   const selectedStatus = statusFilter.value;
+  const selectedTodayTreatment = todayTreatmentFilter?.value || "";
+  const selectedNextTreatment = nextTreatmentFilter?.value || "";
   const filtered = records.filter((record) => {
     const matchesText = !query ||
       record.patientName.toLocaleLowerCase().includes(query) ||
       record.phone.toLocaleLowerCase().includes(query);
     const matchesStatus = !selectedStatus || record.status === selectedStatus;
-    return matchesText && matchesStatus;
+    const matchesTodayTreatment = !selectedTodayTreatment || (record.todayTreatments || []).includes(selectedTodayTreatment);
+    const matchesNextTreatment = !selectedNextTreatment || (record.treatments || []).includes(selectedNextTreatment);
+    return matchesText && matchesStatus && matchesTodayTreatment && matchesNextTreatment;
   });
 
   recordsBody.innerHTML = filtered.map((record, index) => `
@@ -416,6 +432,8 @@ if (recordsBody) {
 
 if (searchInput) searchInput.addEventListener("input", renderDashboard);
 if (statusFilter) statusFilter.addEventListener("change", renderDashboard);
+if (todayTreatmentFilter) todayTreatmentFilter.addEventListener("change", renderDashboard);
+if (nextTreatmentFilter) nextTreatmentFilter.addEventListener("change", renderDashboard);
 
 function csvCell(value) {
   return `"${String(value).replace(/"/g, '""')}"`;
@@ -561,7 +579,7 @@ function mapCsvRecords(text) {
       return;
     }
 
-    const rawInterval = getCell(row, "intervalDays");
+    const rawInterval = getCell(row, "intervalDays").replace(/\s*天$/, "").trim();
     let intervalDays = rawInterval ? Number(rawInterval) : 30;
     const rawDueDate = getCell(row, "dueDate");
     let dueDate = parseCsvDate(rawDueDate);
