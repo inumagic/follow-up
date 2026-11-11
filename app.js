@@ -9,6 +9,12 @@ const emptyState = document.getElementById("emptyState");
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
 const toast = document.getElementById("toast");
+const adminLoginView = document.getElementById("adminLoginView");
+const adminLoginForm = document.getElementById("adminLoginForm");
+const adminEmailInput = document.getElementById("adminEmail");
+const adminPasswordInput = document.getElementById("adminPassword");
+const adminSignOutButton = document.getElementById("adminSignOutButton");
+const dashboardView = document.getElementById("dashboardView");
 const todayTreatmentsContainer = document.getElementById("todayTreatments");
 const nextTreatmentsContainer = document.getElementById("nextTreatments");
 const todayTreatmentSummary = document.getElementById("todayTreatmentSummary");
@@ -16,6 +22,7 @@ const nextTreatmentSummary = document.getElementById("nextTreatmentSummary");
 let records = [];
 let toastTimer;
 let supabaseClient = null;
+let activeAdminUserId = null;
 const treatmentOptions = Array.from({ length: 20 }, (_, index) => `療程${index + 1}`);
 
 function showToast(message) {
@@ -77,8 +84,87 @@ async function refreshRecords() {
     if (recordsBody) renderDashboard();
   } catch (error) {
     console.error("Unable to load shared follow-up records.", error);
-    showToast("讀取共用名單失敗，請確認資料表與匿名存取政策設定。");
+    showToast("讀取名單失敗，請確認登入狀態與資料庫權限設定。");
   }
+}
+
+function setAdminSignedIn(isSignedIn) {
+  if (adminLoginView) adminLoginView.hidden = isSignedIn;
+  if (dashboardView) dashboardView.hidden = !isSignedIn;
+  if (adminSignOutButton) adminSignOutButton.hidden = !isSignedIn;
+}
+
+async function handleAdminSession(session) {
+  const userId = session?.user?.id || null;
+  if (userId === activeAdminUserId) return;
+  activeAdminUserId = userId;
+  setAdminSignedIn(Boolean(userId));
+
+  if (!userId) {
+    records = [];
+    if (recordsBody) recordsBody.innerHTML = "";
+    return;
+  }
+
+  updateLocalImportButton();
+  await refreshRecords();
+}
+
+function initializeAdminAuth() {
+  if (!adminLoginForm || !dashboardView) return;
+  setAdminSignedIn(false);
+
+  adminLoginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submitButton = adminLoginForm.querySelector("button[type=submit]");
+    submitButton.disabled = true;
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: adminEmailInput.value.trim(),
+        password: adminPasswordInput.value
+      });
+      if (error) throw error;
+      adminPasswordInput.value = "";
+      await handleAdminSession(data.session);
+    } catch (error) {
+      console.error("Unable to sign in to the staff dashboard.", error);
+      showToast("登入失敗，請確認帳號、密碼與網路連線。");
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  if (adminSignOutButton) {
+    adminSignOutButton.addEventListener("click", async () => {
+      adminSignOutButton.disabled = true;
+      try {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) throw error;
+        await handleAdminSession(null);
+      } catch (error) {
+        console.error("Unable to sign out from the staff dashboard.", error);
+        showToast("登出失敗，請重試。");
+      } finally {
+        adminSignOutButton.disabled = false;
+      }
+    });
+  }
+
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    window.setTimeout(() => handleAdminSession(session), 0);
+  });
+
+  supabaseClient.auth.getSession().then(({ data, error }) => {
+    if (error) {
+      console.error("Unable to restore staff dashboard session.", error);
+      showToast("無法確認登入狀態，請重新登入。");
+      return;
+    }
+    return handleAdminSession(data.session);
+  }).catch((error) => {
+    console.error("Unable to restore staff dashboard session.", error);
+    showToast("無法確認登入狀態，請重新整理後再試。");
+  });
 }
 
 function initializeCloud() {
@@ -94,9 +180,19 @@ function initializeCloud() {
     return;
   }
 
-  supabaseClient = window.supabase.createClient(config.url, config.anonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
-  if (recordsBody) refreshRecords();
-  updateLocalImportButton();
+  const adminPage = Boolean(recordsBody);
+  supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
+    auth: {
+      persistSession: adminPage,
+      autoRefreshToken: adminPage,
+      detectSessionInUrl: adminPage
+    }
+  });
+  if (adminPage) {
+    initializeAdminAuth();
+  } else {
+    updateLocalImportButton();
+  }
 }
 function populateTreatmentOptions(container, name) {
   if (!container) return;
@@ -255,6 +351,7 @@ function renderDashboard() {
         </select>
       </td>
       <td><a class="calendar-link" href="${escapeHtml(googleCalendarUrl(record))}" target="_blank" rel="noopener noreferrer">加入 Google 行事曆</a></td>
+      <td><button class="delete-record-button" type="button" data-record-id="${escapeHtml(record.id)}" aria-label="刪除 ${escapeHtml(record.patientName)} 的紀錄">刪除</button></td>
     </tr>
   `).join("");
 
@@ -358,6 +455,34 @@ if (form) {
 }
 
 if (recordsBody) {
+  recordsBody.addEventListener("click", async (event) => {
+    const button = event.target.closest(".delete-record-button");
+    if (!button) return;
+
+    const record = records.find((item) => item.id === button.dataset.recordId);
+    if (!record) {
+      showToast("找不到這筆資料，請重新整理頁面。");
+      return;
+    }
+    if (!window.confirm(`確定刪除患者「${record.patientName}」的回診紀錄嗎？此動作無法復原。`)) return;
+
+    button.disabled = true;
+    try {
+      const { error } = await supabaseClient
+        .from("followup_records")
+        .delete()
+        .eq("id", record.id);
+      if (error) throw error;
+      records = records.filter((item) => item.id !== record.id);
+      renderDashboard();
+      showToast("回診紀錄已刪除。");
+    } catch (error) {
+      console.error("Unable to delete follow-up record.", error);
+      button.disabled = false;
+      showToast("刪除失敗，請確認登入狀態與資料庫權限後重試。");
+    }
+  });
+
   recordsBody.addEventListener("change", async (event) => {
     const select = event.target.closest(".status-select");
     if (!select) return;
