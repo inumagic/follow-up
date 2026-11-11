@@ -98,13 +98,6 @@
     }
 
     .form-panel { max-width: 790px; padding: clamp(22px, 4vw, 38px); margin: 0 auto; }
-    .auth-panel { max-width: 480px; padding: 26px; margin: 0 auto 22px; }
-    .auth-panel h2 { margin: 0 0 7px; font-size: 20px; }
-    .auth-panel p { color: var(--muted); font-size: 13px; line-height: 1.6; }
-    .auth-form { display: grid; gap: 14px; }
-    .auth-form[hidden] { display: none; }
-    .text-button { padding: 0; color: var(--green-dark); background: transparent; border: 0; font-size: 12px; text-align: left; text-decoration: underline; }
-    .logout-button { padding: 8px 12px; color: var(--green-dark); background: white; border: 1px solid #cddbd2; border-radius: 8px; font-size: 12px; font-weight: 700; }
     .panel-heading { margin-bottom: 25px; }
     .panel-heading h2 { margin: 0 0 7px; font-size: 21px; }
     .panel-heading p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
@@ -220,33 +213,16 @@
       <img class="brand-mark" src="brand-logo.png" alt="" aria-hidden="true">
       <div>回診追蹤<small>FOLLOW-UP CARE</small></div>
     </div>
-    <button class="logout-button" id="logoutButton" type="button" hidden>登出</button>
   </header>
 
   <main class="page">
-    <section class="panel auth-panel" id="authGate" hidden>
-      <h2>登入回診追蹤</h2>
-      <p>請使用診所人員帳號登入以存取共用資料。</p>
-      <form class="auth-form" id="loginForm">
-        <div><label for="loginEmail">電子郵件</label><input id="loginEmail" type="email" autocomplete="username" required></div>
-        <div><label for="loginPassword">密碼</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
-        <button class="primary" type="submit">登入</button>
-        <button class="text-button" id="forgotPasswordButton" type="button">忘記密碼？寄送重設連結</button>
-      </form>
-      <form class="auth-form" id="passwordRecoveryForm" hidden>
-        <p>請設定新密碼。</p>
-        <div><label for="newPassword">新密碼</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" required></div>
-        <div><label for="confirmNewPassword">再次輸入新密碼</label><input id="confirmNewPassword" type="password" autocomplete="new-password" minlength="6" required></div>
-        <button class="primary" type="submit">更新密碼</button>
-      </form>
-    </section>
     <section class="intro">
       <div class="eyebrow">Patient follow-up</div>
       <h1>魔法牙醫｜患者回診追蹤表</h1>
       <p>填寫回診資料，並由內部管理頁追蹤聯絡進度與回診安排。</p>
     </section>
 
-    <section class="panel form-panel" id="formView" hidden>
+    <section class="panel form-panel" id="formView">
       <div class="panel-heading">
         <h2>新增回診紀錄</h2>
         <p>請填寫患者資料、本次看診及下次回診安排。<span class="required">*</span> 為必填欄位。</p>
@@ -327,4 +303,3 @@
   <script src="app.js"></script>
 </body>
 </html>
-
