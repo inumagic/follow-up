@@ -421,6 +421,212 @@ function csvCell(value) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
 
+const CSV_HEADERS = ["姓名", "出生日期", "填表時間", "聯絡電話", "看診日期", "當天療程", "備註", "下次療程", "回診間隔(天)", "預計回診日期", "回診時間", "填表助理", "狀態"];
+const CSV_HEADER_ALIASES = {
+  patientName: ["姓名", "患者", "患者姓名", "name", "patient_name"],
+  birthDate: ["出生日期", "生日", "birth_date", "birthday"],
+  phone: ["聯絡電話", "電話", "手機", "電話號碼", "phone", "mobile"],
+  visitDate: ["看診日期", "就診日期", "visit_date"],
+  createdAt: ["填表時間", "建立時間", "created_at"],
+  todayTreatments: ["當天療程", "本次療程", "today_treatments"],
+  visitContent: ["備註", "看診內容", "visit_content"],
+  treatments: ["下次療程", "下次療程項目", "treatments", "next_treatments"],
+  intervalDays: ["回診間隔(天)", "回診間隔", "間隔天數", "interval_days"],
+  dueDate: ["預計回診日期", "預計回診", "回診日期", "due_date"],
+  dueTime: ["回診時間", "預計回診時間", "due_time"],
+  assistant: ["填表助理", "助理", "assistant"],
+  status: ["狀態", "追蹤狀態", "status"]
+};
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (character === '"' && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = false;
+      } else {
+        field += character;
+      }
+    } else if (character === '"' && field.length === 0) {
+      quoted = true;
+    } else if (character === ",") {
+      row.push(field);
+      field = "";
+    } else if (character === "\n" || character === "\r") {
+      if (character === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(field);
+      if (row.some((cell) => cell.trim() !== "")) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += character;
+    }
+  }
+
+  if (quoted) throw new Error("CSV 有未配對的雙引號。");
+  row.push(field);
+  if (row.some((cell) => cell.trim() !== "")) rows.push(row);
+  return rows;
+}
+
+function parseCsvDate(value) {
+  const normalized = String(value || "").trim()
+    .replace(/[T ]\d{1,2}:\d{2}(?::\d{2})?.*$/, "")
+    .replace(/年/g, "-").replace(/月/g, "-").replace(/日$/, "");
+  let match = normalized.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  let year;
+  let month;
+  let day;
+  if (match) {
+    [, year, month, day] = match;
+  } else {
+    match = normalized.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (!match) return "";
+    [, month, day, year] = match;
+  }
+
+  const numericYear = Number(year);
+  const fullYear = numericYear > 0 && numericYear < 1911 ? numericYear + 1911 : numericYear;
+  const date = new Date(Date.UTC(fullYear, Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== fullYear || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) return "";
+  return `${fullYear}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseCsvTimestamp(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const taipeiMatch = text.match(/^(\d{4}[/.年-]\d{1,2}[/.月-]\d{1,2}日?)\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (taipeiMatch) {
+    const date = parseCsvDate(taipeiMatch[1]);
+    if (!date) return "";
+    const [, , hours, minutes, seconds = "00"] = taipeiMatch;
+    if (Number(hours) > 23 || Number(minutes) > 59 || Number(seconds) > 59) return "";
+    return new Date(`${date}T${String(hours).padStart(2, "0")}:${minutes}:${seconds}+08:00`).toISOString();
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+function csvTreatments(value) {
+  return String(value || "").split(/[、，,;；|]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function csvFingerprint(value) {
+  let first = 2166136261;
+  let second = 0x5bd1e995;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    first = Math.imul(first ^ code, 16777619);
+    second = Math.imul(second ^ code, 2246822519);
+  }
+  return `csv-${(first >>> 0).toString(16).padStart(8, "0")}${(second >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function mapCsvRecords(text) {
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) throw new Error("CSV 只有標題列，沒有可匯入的資料。");
+
+  const headers = rows[0].map((header) => header.replace(/^\uFEFF/, "").trim().toLocaleLowerCase());
+  const columnIndexes = Object.fromEntries(Object.entries(CSV_HEADER_ALIASES).map(([field, aliases]) => [
+    field,
+    headers.findIndex((header) => aliases.some((alias) => alias.toLocaleLowerCase() === header))
+  ]));
+  const missingHeaders = ["patientName", "birthDate", "phone", "visitDate"].filter((field) => columnIndexes[field] < 0);
+  if (missingHeaders.length) throw new Error("CSV 必須有姓名、出生日期、聯絡電話、看診日期欄位。可先下載 CSV 範本。");
+
+  const getCell = (row, field) => columnIndexes[field] < 0 ? "" : String(row[columnIndexes[field]] || "").trim();
+  const imported = [];
+  const errors = [];
+
+  rows.slice(1).forEach((row, offset) => {
+    const line = offset + 2;
+    const patientName = getCell(row, "patientName");
+    const birthDate = parseCsvDate(getCell(row, "birthDate"));
+    const phone = getCell(row, "phone");
+    const visitDate = parseCsvDate(getCell(row, "visitDate"));
+    if (!patientName || !birthDate || !phone || !visitDate) {
+      errors.push(`第 ${line} 列：姓名、電話及有效的出生日期與看診日期為必填。`);
+      return;
+    }
+    if (birthDate > visitDate) {
+      errors.push(`第 ${line} 列：出生日期不能晚於看診日期。`);
+      return;
+    }
+
+    const rawInterval = getCell(row, "intervalDays");
+    let intervalDays = rawInterval ? Number(rawInterval) : 30;
+    const rawDueDate = getCell(row, "dueDate");
+    let dueDate = parseCsvDate(rawDueDate);
+    if (rawDueDate && !dueDate) {
+      errors.push(`第 ${line} 列：預計回診日期格式無效。`);
+      return;
+    }
+    if (!rawInterval && dueDate) {
+      intervalDays = Math.round((Date.parse(`${dueDate}T00:00:00Z`) - Date.parse(`${visitDate}T00:00:00Z`)) / 86400000);
+    }
+    if (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 1095) {
+      errors.push(`第 ${line} 列：回診間隔需為 1 至 1095 的整數。`);
+      return;
+    }
+    if (!dueDate) dueDate = addDays(visitDate, intervalDays);
+    if (dueDate < visitDate) {
+      errors.push(`第 ${line} 列：預計回診日期不能早於看診日期。`);
+      return;
+    }
+
+    const dueTime = getCell(row, "dueTime");
+    if (dueTime && !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(dueTime)) {
+      errors.push(`第 ${line} 列：回診時間格式需為 HH:MM。`);
+      return;
+    }
+
+    const statusValue = getCell(row, "status");
+    const status = ["待聯絡", "已聯絡", "已預約"].includes(statusValue) ? statusValue : "待聯絡";
+    imported.push({
+      record: {
+        patientName,
+        birthDate,
+        phone,
+        visitDate,
+        visitContent: getCell(row, "visitContent"),
+        todayTreatments: csvTreatments(getCell(row, "todayTreatments")),
+        treatments: csvTreatments(getCell(row, "treatments")),
+        intervalDays,
+        dueDate,
+        dueTime,
+        assistant: getCell(row, "assistant") || "CSV 匯入",
+        status,
+        createdAt: parseCsvTimestamp(getCell(row, "createdAt"))
+      }
+    });
+  });
+
+  if (errors.length) throw new Error(`CSV 內容有錯誤，尚未匯入：\n${errors.slice(0, 12).join("\n")}${errors.length > 12 ? `\n另有 ${errors.length - 12} 列錯誤。` : ""}`);
+  if (!imported.length) throw new Error("CSV 沒有可匯入的資料列。");
+  if (imported.length > 5000) throw new Error("單次最多匯入 5,000 筆，請分批匯入。");
+  return imported;
+}
+
+function downloadCsvFile(content, fileName) {
+  const blob = new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 const exportButton = document.getElementById("exportButton");
 if (exportButton) {
   exportButton.addEventListener("click", () => {
@@ -429,7 +635,6 @@ if (exportButton) {
       return;
     }
 
-    const headers = ["姓名", "出生日期", "填表時間", "聯絡電話", "看診日期", "當天療程", "備註", "下次療程", "回診間隔(天)", "預計回診日期", "回診時間", "填表助理", "狀態"];
     const rows = records.map((record) => [
       record.patientName,
       record.birthDate,
@@ -445,16 +650,71 @@ if (exportButton) {
       record.assistant,
       record.status
     ]);
-    const csv = "\uFEFF" + [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `回診追蹤_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    const csv = [CSV_HEADERS, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    downloadCsvFile(csv, `回診追蹤_${new Date().toISOString().slice(0, 10)}.csv`);
+  });
+}
+
+const csvImportButton = document.getElementById("csvImportButton");
+const csvFileInput = document.getElementById("csvFileInput");
+const csvTemplateButton = document.getElementById("csvTemplateButton");
+
+if (csvTemplateButton) {
+  csvTemplateButton.addEventListener("click", () => {
+    downloadCsvFile(CSV_HEADERS.map(csvCell).join(","), "回診名單匯入範本.csv");
+  });
+}
+
+if (csvImportButton && csvFileInput) {
+  csvImportButton.addEventListener("click", () => csvFileInput.click());
+  csvFileInput.addEventListener("change", async () => {
+    const file = csvFileInput.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      window.alert("CSV 檔案不可超過 5 MB。");
+      csvFileInput.value = "";
+      return;
+    }
+
+    csvImportButton.disabled = true;
+    try {
+      let csvText;
+      const buffer = await file.arrayBuffer();
+      try {
+        csvText = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+      } catch {
+        csvText = new TextDecoder("big5").decode(buffer);
+      }
+      const imported = mapCsvRecords(csvText);
+      if (!window.confirm(`準備匯入 ${imported.length} 筆資料。完全相同的資料會自動略過，確定繼續嗎？`)) return;
+
+      const rows = imported.map(({ record }) => {
+        const databaseRecord = toDatabaseRecord(record);
+        if (record.createdAt) databaseRecord.created_at = record.createdAt;
+        const fingerprint = [
+          record.patientName, record.birthDate, record.phone, record.visitDate,
+          record.visitContent, record.todayTreatments.join("、"), record.treatments.join("、"),
+          record.intervalDays, record.dueDate, record.dueTime, record.assistant
+        ].join("\u001f");
+        return { ...databaseRecord, legacy_id: csvFingerprint(fingerprint) };
+      });
+
+      for (let index = 0; index < rows.length; index += 100) {
+        const batch = rows.slice(index, index + 100);
+        const { error } = await supabaseClient
+          .from("followup_records")
+          .upsert(batch, { onConflict: "legacy_id", ignoreDuplicates: true });
+        if (error) throw error;
+      }
+      await refreshRecords();
+      showToast(`CSV 已處理 ${rows.length} 筆；重複資料已略過。`);
+    } catch (error) {
+      console.error("Unable to import CSV follow-up records.", error);
+      window.alert(error.message || "CSV 匯入失敗，請確認欄位與資料庫設定後重試。");
+    } finally {
+      csvImportButton.disabled = false;
+      csvFileInput.value = "";
+    }
   });
 }
 
