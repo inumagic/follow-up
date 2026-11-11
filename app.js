@@ -9,12 +9,6 @@ const emptyState = document.getElementById("emptyState");
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
 const toast = document.getElementById("toast");
-const adminLoginView = document.getElementById("adminLoginView");
-const adminLoginForm = document.getElementById("adminLoginForm");
-const adminEmailInput = document.getElementById("adminEmail");
-const adminPasswordInput = document.getElementById("adminPassword");
-const adminSignOutButton = document.getElementById("adminSignOutButton");
-const dashboardView = document.getElementById("dashboardView");
 const todayTreatmentsContainer = document.getElementById("todayTreatments");
 const nextTreatmentsContainer = document.getElementById("nextTreatments");
 const todayTreatmentSummary = document.getElementById("todayTreatmentSummary");
@@ -22,7 +16,6 @@ const nextTreatmentSummary = document.getElementById("nextTreatmentSummary");
 let records = [];
 let toastTimer;
 let supabaseClient = null;
-let activeAdminUserId = null;
 const treatmentOptions = Array.from({ length: 20 }, (_, index) => `療程${index + 1}`);
 
 function showToast(message) {
@@ -88,85 +81,6 @@ async function refreshRecords() {
   }
 }
 
-function setAdminSignedIn(isSignedIn) {
-  if (adminLoginView) adminLoginView.hidden = isSignedIn;
-  if (dashboardView) dashboardView.hidden = !isSignedIn;
-  if (adminSignOutButton) adminSignOutButton.hidden = !isSignedIn;
-}
-
-async function handleAdminSession(session) {
-  const userId = session?.user?.id || null;
-  if (userId === activeAdminUserId) return;
-  activeAdminUserId = userId;
-  setAdminSignedIn(Boolean(userId));
-
-  if (!userId) {
-    records = [];
-    if (recordsBody) recordsBody.innerHTML = "";
-    return;
-  }
-
-  updateLocalImportButton();
-  await refreshRecords();
-}
-
-function initializeAdminAuth() {
-  if (!adminLoginForm || !dashboardView) return;
-  setAdminSignedIn(false);
-
-  adminLoginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const submitButton = adminLoginForm.querySelector("button[type=submit]");
-    submitButton.disabled = true;
-    try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email: adminEmailInput.value.trim(),
-        password: adminPasswordInput.value
-      });
-      if (error) throw error;
-      adminPasswordInput.value = "";
-      await handleAdminSession(data.session);
-    } catch (error) {
-      console.error("Unable to sign in to the staff dashboard.", error);
-      showToast("登入失敗，請確認帳號、密碼與網路連線。");
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
-
-  if (adminSignOutButton) {
-    adminSignOutButton.addEventListener("click", async () => {
-      adminSignOutButton.disabled = true;
-      try {
-        const { error } = await supabaseClient.auth.signOut();
-        if (error) throw error;
-        await handleAdminSession(null);
-      } catch (error) {
-        console.error("Unable to sign out from the staff dashboard.", error);
-        showToast("登出失敗，請重試。");
-      } finally {
-        adminSignOutButton.disabled = false;
-      }
-    });
-  }
-
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
-    window.setTimeout(() => handleAdminSession(session), 0);
-  });
-
-  supabaseClient.auth.getSession().then(({ data, error }) => {
-    if (error) {
-      console.error("Unable to restore staff dashboard session.", error);
-      showToast("無法確認登入狀態，請重新登入。");
-      return;
-    }
-    return handleAdminSession(data.session);
-  }).catch((error) => {
-    console.error("Unable to restore staff dashboard session.", error);
-    showToast("無法確認登入狀態，請重新整理後再試。");
-  });
-}
-
 function initializeCloud() {
   const config = window.FOLLOWUP_SUPABASE_CONFIG;
   const configured = config &&
@@ -180,19 +94,11 @@ function initializeCloud() {
     return;
   }
 
-  const adminPage = Boolean(recordsBody);
   supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
-    auth: {
-      persistSession: adminPage,
-      autoRefreshToken: adminPage,
-      detectSessionInUrl: adminPage
-    }
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   });
-  if (adminPage) {
-    initializeAdminAuth();
-  } else {
-    updateLocalImportButton();
-  }
+  if (recordsBody) refreshRecords();
+  updateLocalImportButton();
 }
 function populateTreatmentOptions(container, name) {
   if (!container) return;
