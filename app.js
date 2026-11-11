@@ -40,7 +40,8 @@ function fromDatabaseRecord(row) {
     dueDate: row.due_date,
     dueTime: row.due_time || "",
     assistant: row.assistant,
-    status: row.status
+    status: row.status,
+    createdAt: row.created_at || ""
   };
 }
 
@@ -151,6 +152,23 @@ function formatDate(dateString) {
   return `${year}/${month}/${day}`;
 }
 
+function formatSubmissionTime(timestamp) {
+  if (!timestamp) return "—";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("zh-TW", {
+    calendar: "gregory",
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
     "&": "&amp;",
@@ -222,6 +240,7 @@ function renderDashboard() {
     <tr>
       <td>${index + 1}</td>
       <td><div class="patient-name">${escapeHtml(record.patientName)}</div><div class="subtext">出生 ${escapeHtml(formatDate(record.birthDate))}</div></td>
+      <td>${escapeHtml(formatSubmissionTime(record.createdAt))}</td>
       <td>${escapeHtml(record.phone)}</td>
       <td>${escapeHtml(formatDate(record.visitDate))}</td>
       <td><div>${escapeHtml(formatDate(record.dueDate))}</div><div class="subtext">${escapeHtml(record.dueTime || "時間未定")}</div></td>
@@ -379,10 +398,11 @@ if (exportButton) {
       return;
     }
 
-    const headers = ["姓名", "出生日期", "聯絡電話", "看診日期", "當天療程", "備註", "下次療程", "回診間隔(天)", "預計回診日期", "回診時間", "填表助理", "狀態"];
+    const headers = ["姓名", "出生日期", "填表時間", "聯絡電話", "看診日期", "當天療程", "備註", "下次療程", "回診間隔(天)", "預計回診日期", "回診時間", "填表助理", "狀態"];
     const rows = records.map((record) => [
       record.patientName,
       record.birthDate,
+      formatSubmissionTime(record.createdAt),
       record.phone,
       record.visitDate,
       (record.todayTreatments || []).join("、"),
@@ -470,3 +490,4 @@ if (importLocalButton) {
 }
 
 initializeCloud();
+
