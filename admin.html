@@ -53,22 +53,6 @@
     .tab { display: block; padding: 10px 17px; color: #64736b; border-radius: 9px; text-decoration: none; font-weight: 650; }
     .tab.active { color: var(--green-dark); background: white; box-shadow: 0 2px 6px rgb(20 45 32 / 8%); }
     .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
-    .auth-panel { max-width: 460px; padding: 24px; }
-    .auth-panel h2 { margin: 0 0 8px; font-size: 21px; }
-    .auth-panel p { margin: 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
-    .auth-form { display: grid; gap: 13px; }
-    .auth-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 650; }
-    .auth-form input { width: 100%; min-height: 42px; }
-    .auth-submit {
-      min-height: 42px;
-      padding: 0 16px;
-      color: white;
-      background: var(--green);
-      border: 0;
-      border-radius: 9px;
-      font-weight: 700;
-    }
-    .auth-submit:hover { background: var(--green-dark); }
     .delete-record-button {
       min-height: 32px;
       padding: 5px 9px;
@@ -178,7 +162,6 @@
       <img class="brand-mark" src="brand-logo.png" alt="" aria-hidden="true">
       <div>回診追蹤管理<small>FOLLOW-UP CARE</small></div>
     </div>
-    <button class="button-secondary" id="adminSignOutButton" type="button" hidden>登出</button>
   </header>
 
   <main class="page">
@@ -193,21 +176,7 @@
       <a class="tab active" href="admin.html" aria-current="page">內部管理</a>
     </nav>
 
-    <section class="panel auth-panel" id="adminLoginView">
-      <h2>管理者登入</h2>
-      <p>請使用已建立的管理者 Email 與密碼登入。此頁不提供公開註冊。</p>
-      <form class="auth-form" id="adminLoginForm">
-        <label for="adminEmail">管理者 Email
-          <input id="adminEmail" name="email" type="email" autocomplete="username" required>
-        </label>
-        <label for="adminPassword">密碼
-          <input id="adminPassword" name="password" type="password" autocomplete="current-password" required>
-        </label>
-        <button class="auth-submit" type="submit">登入查看名單</button>
-      </form>
-    </section>
-
-    <section class="dashboard" id="dashboardView" hidden>
+    <section class="dashboard" id="dashboardView">
       <div class="dashboard-top">
         <div>
           <h2>回診追蹤總覽</h2>
@@ -221,7 +190,7 @@
 
       <div class="notice">
         <span aria-hidden="true">ⓘ</span>
-        <span><strong>共用資料與行事曆提醒：</strong>可直接查看雲端共用名單。按每筆資料的「加入 Google 行事曆」會開啟預填行程，需登入 Google Calendar 並自行儲存；提醒內容會包含患者姓名、出生日期、電話與下次療程。請確認 Google 帳戶及行事曆適合存放這些資料。</span>
+        <span><strong>公開管理頁：</strong>任何能開啟此頁的人都能查看、修改與刪除名單，請勿在此存放患者個資。按「加入 Google 行事曆」會開啟預填行程，需登入 Google Calendar 並自行儲存。</span>
       </div>
 
       <div class="stats">
@@ -283,7 +252,7 @@
           <div class="empty" id="emptyState">目前沒有回診紀錄，請從「回診表單」新增資料。</div>
         </div>
       </section>
-      <p class="footer-note">名單僅供已登入管理者讀取、更新與刪除；公開表單僅有新增資料權限。</p>
+      <p class="footer-note">此管理頁不要求登入；名單資料與刪除功能對所有訪客開放。</p>
     </section>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
