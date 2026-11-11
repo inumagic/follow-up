@@ -15,8 +15,6 @@ const todayTreatmentSummary = document.getElementById("todayTreatmentSummary");
 const nextTreatmentSummary = document.getElementById("nextTreatmentSummary");
 let records = [];
 let toastTimer;
-let currentUser = null;
-let authorizedUserId = null;
 let supabaseClient = null;
 const treatmentOptions = Array.from({ length: 20 }, (_, index) => `療程${index + 1}`);
 
@@ -59,8 +57,7 @@ function toDatabaseRecord(record) {
     due_date: record.dueDate,
     due_time: record.dueTime || null,
     assistant: record.assistant,
-    status: record.status,
-    created_by: currentUser.id
+    status: record.status
   };
 }
 
@@ -79,63 +76,11 @@ async function refreshRecords() {
     if (recordsBody) renderDashboard();
   } catch (error) {
     console.error("Unable to load shared follow-up records.", error);
-    showToast("讀取共用名單失敗，請確認資料表與登入權限設定。");
+    showToast("讀取共用名單失敗，請確認資料表與匿名存取政策設定。");
   }
 }
 
-const authGate = document.getElementById("authGate");
-const loginForm = document.getElementById("loginForm");
-const forgotPasswordButton = document.getElementById("forgotPasswordButton");
-const passwordRecoveryForm = document.getElementById("passwordRecoveryForm");
-const logoutButton = document.getElementById("logoutButton");
-const securedView = document.getElementById("formView") || document.getElementById("dashboardView");
-let recoveringPassword = false;
-
-async function updateAuthView() {
-  if (recoveringPassword) {
-    if (authGate) authGate.hidden = false;
-    if (loginForm) loginForm.hidden = true;
-    if (passwordRecoveryForm) passwordRecoveryForm.hidden = false;
-    if (securedView) securedView.hidden = true;
-    if (logoutButton) logoutButton.hidden = true;
-    return;
-  }
-
-  if (loginForm) loginForm.hidden = false;
-  if (passwordRecoveryForm) passwordRecoveryForm.hidden = true;
-  if (currentUser && authorizedUserId !== currentUser.id) {
-    const { data, error } = await supabaseClient
-      .from("followup_staff")
-      .select("user_id")
-      .eq("user_id", currentUser.id)
-      .maybeSingle();
-    if (error) {
-      if (authGate) authGate.hidden = false;
-      if (securedView) securedView.hidden = true;
-      showToast("無法驗證人員權限，請確認已執行最新的資料庫設定。");
-      return;
-    }
-    if (!data) {
-      currentUser = null;
-      if (authGate) authGate.hidden = false;
-      if (securedView) securedView.hidden = true;
-      showToast("此帳號尚未加入診所人員白名單。");
-      await supabaseClient.auth.signOut();
-      return;
-    }
-    authorizedUserId = currentUser.id;
-  }
-
-  if (!currentUser) authorizedUserId = null;
-  const signedIn = Boolean(currentUser && authorizedUserId === currentUser.id);
-  if (authGate) authGate.hidden = signedIn;
-  if (securedView) securedView.hidden = !signedIn;
-  if (logoutButton) logoutButton.hidden = !signedIn;
-  updateLocalImportButton();
-  if (signedIn && recordsBody) refreshRecords();
-}
-
-function initializeCloudAuth() {
+function initializeCloud() {
   const config = window.FOLLOWUP_SUPABASE_CONFIG;
   const configured = config &&
     /^https:\/\//.test(config.url) &&
@@ -144,103 +89,14 @@ function initializeCloudAuth() {
     !config.anonKey.includes("PASTE_");
 
   if (!configured || !window.supabase?.createClient) {
-    if (authGate) authGate.hidden = false;
-    if (securedView) securedView.hidden = true;
-    const message = authGate?.querySelector("p");
-    if (message) message.textContent = "請先設定 supabase-config.js，並依設定指南建立資料表與登入帳號。";
-    if (loginForm) loginForm.hidden = true;
+    showToast("請先設定 supabase-config.js 與資料表，再使用共用名單功能。");
     return;
   }
 
-  supabaseClient = window.supabase.createClient(config.url, config.anonKey);
-  supabaseClient.auth.onAuthStateChange((event, session) => {
-    window.setTimeout(() => {
-      currentUser = session?.user || null;
-      if (event === "PASSWORD_RECOVERY") {
-        recoveringPassword = true;
-        updateAuthView();
-        return;
-      }
-      if (event === "SIGNED_OUT") recoveringPassword = false;
-      if (!currentUser) authorizedUserId = null;
-      updateAuthView();
-    }, 0);
-  });
-
-  supabaseClient.auth.getSession().then(({ data, error }) => {
-    if (error) {
-      showToast("無法確認登入狀態，請重新整理頁面。");
-      return;
-    }
-    currentUser = data.session?.user || null;
-    updateAuthView();
-  });
+  supabaseClient = window.supabase.createClient(config.url, config.anonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  if (recordsBody) refreshRecords();
+  updateLocalImportButton();
 }
-
-if (loginForm) {
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const button = loginForm.querySelector("button[type=submit]");
-    button.disabled = true;
-    const { error } = await supabaseClient.auth.signInWithPassword({
-      email: document.getElementById("loginEmail").value.trim(),
-      password: document.getElementById("loginPassword").value
-    });
-    button.disabled = false;
-    if (error) showToast("登入失敗，請確認帳號與密碼。");
-  });
-}
-
-if (forgotPasswordButton) {
-  forgotPasswordButton.addEventListener("click", async () => {
-    const email = document.getElementById("loginEmail").value.trim();
-    if (!email) {
-      showToast("請先輸入登入電子郵件。");
-      document.getElementById("loginEmail").focus();
-      return;
-    }
-    const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
-    if (error) {
-      console.error("Unable to request a password reset.", error);
-      showToast(`重設信寄送失敗：${error.message}`);
-      return;
-    }
-    showToast("若此帳號存在，密碼重設信將寄到該電子郵件。");
-  });
-}
-
-if (passwordRecoveryForm) {
-  passwordRecoveryForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (!passwordRecoveryForm.reportValidity()) return;
-    const password = document.getElementById("newPassword").value;
-    const confirmation = document.getElementById("confirmNewPassword").value;
-    if (password !== confirmation) {
-      showToast("兩次輸入的密碼不一致。");
-      return;
-    }
-    const button = passwordRecoveryForm.querySelector("button[type=submit]");
-    button.disabled = true;
-    const { error } = await supabaseClient.auth.updateUser({ password });
-    button.disabled = false;
-    if (error) {
-      console.error("Unable to update the password.", error);
-      showToast("密碼更新失敗，請重新寄送重設信。");
-      return;
-    }
-    recoveringPassword = false;
-    await supabaseClient.auth.signOut();
-    showToast("密碼已更新，請使用新密碼登入。");
-  });
-}
-
-if (logoutButton) {
-  logoutButton.addEventListener("click", async () => {
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) showToast("登出失敗，請稍後再試。");
-  });
-}
-
 function populateTreatmentOptions(container, name) {
   if (!container) return;
   container.innerHTML = treatmentOptions.map((treatment, index) => {
@@ -414,6 +270,10 @@ if (form) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
+    if (!supabaseClient) {
+      showToast("共用名單尚未連線，請確認 Supabase 設定後重試。");
+      return;
+    }
 
     const data = new FormData(form);
     const todayTreatments = data.getAll("todayTreatment");
@@ -457,14 +317,17 @@ if (form) {
 
     const submitButton = form.querySelector("button[type=submit]");
     submitButton.disabled = true;
-    const { error } = await supabaseClient
-      .from("followup_records")
-      .insert(toDatabaseRecord(record));
-    submitButton.disabled = false;
-    if (error) {
+    try {
+      const { error } = await supabaseClient
+        .from("followup_records")
+        .insert(toDatabaseRecord(record));
+      if (error) throw error;
+    } catch (error) {
       console.error("Unable to save follow-up record.", error);
-      showToast("資料未能儲存至共用名單，請檢查網路後重試。");
+      showToast(`資料未能儲存：${error.message || "請檢查資料表設定與網路後重試。"}`);
       return;
+    } finally {
+      submitButton.disabled = false;
     }
     form.reset();
     customDaysField.hidden = true;
@@ -560,7 +423,7 @@ function readLegacyRecords() {
 }
 
 function updateLocalImportButton() {
-  if (!importLocalButton || !currentUser) return;
+  if (!importLocalButton || !supabaseClient) return;
   let alreadyMigrated = false;
   try {
     alreadyMigrated = window.localStorage.getItem(LEGACY_MIGRATION_KEY) === "true";
@@ -606,5 +469,4 @@ if (importLocalButton) {
   });
 }
 
-initializeCloudAuth();
-
+initializeCloud();

@@ -4,4 +4,3 @@ window.FOLLOWUP_SUPABASE_CONFIG = {
   url: "https://jjbgaapimvelblpvbmhp.supabase.co",
   anonKey: "sb_publishable_wllhh5EuZnbJD_MPFLQMng_f4RQR_Vq"
 };
-
