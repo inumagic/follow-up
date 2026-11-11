@@ -19,6 +19,17 @@ create table if not exists public.followup_records (
   created_at timestamptz not null default now()
 );
 
+-- Preserve a submission timestamp for older tables as well as new records.
+alter table public.followup_records
+  add column if not exists created_at timestamptz not null default now();
+alter table public.followup_records
+  alter column created_at set default now();
+update public.followup_records
+  set created_at = now()
+  where created_at is null;
+alter table public.followup_records
+  alter column created_at set not null;
+
 -- Keep the status values in sync with app.js, including databases created by
 -- an earlier version of this schema. CREATE TABLE IF NOT EXISTS does not
 -- update constraints on an existing table.
@@ -61,3 +72,4 @@ create policy "Public can add follow-up records"
   on public.followup_records for insert to anon with check (true);
 create policy "Public can update follow-up records"
   on public.followup_records for update to anon using (true) with check (true);
+
