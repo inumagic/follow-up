@@ -1,5 +1,5 @@
 -- Shared follow-up records for the static GitHub Pages app.
--- Run this in Supabase SQL Editor after creating a project.
+-- Anonymous visitors can read, insert, and update every record.
 
 create table if not exists public.followup_records (
   id uuid primary key default gen_random_uuid(),
@@ -15,52 +15,49 @@ create table if not exists public.followup_records (
   due_date date not null,
   due_time time,
   assistant text not null,
-  status text not null default '待聯絡' check (status in ('待聯絡', '已聯絡', '已預約')),
-  created_by uuid not null references auth.users(id),
+  status text not null default '待聯絡',
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.followup_staff (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  created_at timestamptz not null default now()
-);
+-- Keep the status values in sync with app.js, including databases created by
+-- an earlier version of this schema. CREATE TABLE IF NOT EXISTS does not
+-- update constraints on an existing table.
+alter table public.followup_records
+  alter column status set default '待聯絡';
+alter table public.followup_records
+  drop constraint if exists followup_records_status_check;
+update public.followup_records
+  set status = '待聯絡'
+  where status not in ('待聯絡', '已聯絡', '已預約');
+alter table public.followup_records
+  add constraint followup_records_status_check
+  check (status in ('待聯絡', '已聯絡', '已預約'));
+
+-- Allow inserts into databases that still have the legacy ownership column.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'followup_records' and column_name = 'created_by'
+  ) then
+    alter table public.followup_records alter column created_by drop not null;
+  end if;
+end $$;
 
 alter table public.followup_records enable row level security;
-alter table public.followup_staff enable row level security;
-
-revoke all on public.followup_records from anon;
-revoke all on public.followup_staff from anon;
-grant select, insert, update on public.followup_records to authenticated;
-grant select on public.followup_staff to authenticated;
-
-drop policy if exists "Staff can read own membership" on public.followup_staff;
-create policy "Staff can read own membership"
-  on public.followup_staff for select to authenticated
-  using (auth.uid() = user_id);
+grant select, insert, update on public.followup_records to anon;
+revoke all on public.followup_records from authenticated;
 
 drop policy if exists "Staff can read follow-up records" on public.followup_records;
-create policy "Staff can read follow-up records"
-  on public.followup_records for select to authenticated
-  using (exists (
-    select 1 from public.followup_staff where user_id = auth.uid()
-  ));
-
 drop policy if exists "Staff can add follow-up records" on public.followup_records;
-create policy "Staff can add follow-up records"
-  on public.followup_records for insert to authenticated
-  with check (
-    auth.uid() = created_by and exists (
-      select 1 from public.followup_staff where user_id = auth.uid()
-    )
-  );
-
 drop policy if exists "Staff can update follow-up records" on public.followup_records;
-create policy "Staff can update follow-up records"
-  on public.followup_records for update to authenticated
-  using (exists (
-    select 1 from public.followup_staff where user_id = auth.uid()
-  ))
-  with check (exists (
-    select 1 from public.followup_staff where user_id = auth.uid()
-  ));
+drop policy if exists "Public can read follow-up records" on public.followup_records;
+drop policy if exists "Public can add follow-up records" on public.followup_records;
+drop policy if exists "Public can update follow-up records" on public.followup_records;
 
+create policy "Public can read follow-up records"
+  on public.followup_records for select to anon using (true);
+create policy "Public can add follow-up records"
+  on public.followup_records for insert to anon with check (true);
+create policy "Public can update follow-up records"
+  on public.followup_records for update to anon using (true) with check (true);
