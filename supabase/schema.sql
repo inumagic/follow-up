@@ -1,5 +1,6 @@
 -- Shared follow-up records for the static GitHub Pages app.
--- Anonymous visitors can read, insert, and update every record.
+-- Anonymous visitors can submit records. Only authenticated staff can read,
+-- update, or delete records.
 
 create table if not exists public.followup_records (
   id uuid primary key default gen_random_uuid(),
@@ -56,20 +57,32 @@ begin
 end $$;
 
 alter table public.followup_records enable row level security;
-grant select, insert, update on public.followup_records to anon;
-revoke all on public.followup_records from authenticated;
+revoke all privileges on table public.followup_records from public, anon, authenticated;
+grant insert on public.followup_records to anon;
+grant select, insert, update, delete on public.followup_records to authenticated;
 
-drop policy if exists "Staff can read follow-up records" on public.followup_records;
-drop policy if exists "Staff can add follow-up records" on public.followup_records;
-drop policy if exists "Staff can update follow-up records" on public.followup_records;
-drop policy if exists "Public can read follow-up records" on public.followup_records;
-drop policy if exists "Public can add follow-up records" on public.followup_records;
-drop policy if exists "Public can update follow-up records" on public.followup_records;
+-- Remove legacy policies, including any permissive policy left by an older setup.
+do $$
+declare
+  existing_policy record;
+begin
+  for existing_policy in
+    select policyname
+    from pg_policies
+    where schemaname = 'public' and tablename = 'followup_records'
+  loop
+    execute format('drop policy if exists %I on public.followup_records', existing_policy.policyname);
+  end loop;
+end $$;
 
-create policy "Public can read follow-up records"
-  on public.followup_records for select to anon using (true);
 create policy "Public can add follow-up records"
   on public.followup_records for insert to anon with check (true);
-create policy "Public can update follow-up records"
-  on public.followup_records for update to anon using (true) with check (true);
+create policy "Authenticated staff can read follow-up records"
+  on public.followup_records for select to authenticated using (auth.uid() is not null);
+create policy "Authenticated staff can add follow-up records"
+  on public.followup_records for insert to authenticated with check (auth.uid() is not null);
+create policy "Authenticated staff can update follow-up records"
+  on public.followup_records for update to authenticated using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated staff can delete follow-up records"
+  on public.followup_records for delete to authenticated using (auth.uid() is not null);
 
