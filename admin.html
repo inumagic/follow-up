@@ -180,9 +180,12 @@
       <div class="dashboard-top">
         <div>
           <h2>回診追蹤總覽</h2>
-          <p>查看回診安排與聯絡進度。</p>
+          <p>查看回診安排與聯絡進度；CSV 至少需有姓名、出生日期、聯絡電話與看診日期。</p>
         </div>
         <div class="dashboard-actions">
+          <button class="button-secondary" id="csvTemplateButton" type="button">下載 CSV 範本</button>
+          <button class="button-secondary" id="csvImportButton" type="button">匯入 CSV</button>
+          <input id="csvFileInput" type="file" accept=".csv,text/csv" hidden>
           <button class="button-secondary" id="importLocalButton" type="button" hidden>匯入此裝置舊資料</button>
           <button class="button-secondary" id="exportButton" type="button">匯出 CSV</button>
         </div>
