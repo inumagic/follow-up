@@ -101,7 +101,7 @@
     .table-panel { overflow: hidden; }
     .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px; border-bottom: 1px solid var(--line); }
     .table-toolbar strong { font-size: 14px; }
-    .filters { display: flex; gap: 8px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; }
     input, select { min-height: 37px; padding: 7px 10px; color: var(--ink); background: white; border: 1px solid #dce4df; border-radius: 8px; outline: none; }
     input:focus, select:focus { border-color: #75ad97; box-shadow: 0 0 0 3px rgb(35 123 97 / 11%); }
     .filters input { width: 190px; }
@@ -224,6 +224,12 @@
           <strong>回診名單</strong>
           <div class="filters">
             <input id="searchInput" type="search" placeholder="搜尋姓名或電話" aria-label="搜尋姓名或電話">
+            <select id="todayTreatmentFilter" aria-label="依當天療程分類篩選">
+              <option value="">當天療程分類（全部）</option>
+            </select>
+            <select id="nextTreatmentFilter" aria-label="依下次療程分類篩選">
+              <option value="">下次療程分類（全部）</option>
+            </select>
             <select id="statusFilter" aria-label="依狀態篩選">
               <option value="">全部狀態</option>
               <option value="待聯絡">待聯絡</option>
