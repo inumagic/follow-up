@@ -1,26 +1,15 @@
 # Supabase 共用名單設定
 
-網站部署在 GitHub Pages，資料存在 Supabase。只有登入且列在 `followup_staff` 名單中的人員，才能讀取、建立或更新患者回診資料。
+網站部署在 GitHub Pages，資料存在 Supabase。公開表單可以新增回診資料；管理名單必須以 Supabase Auth 帳號登入，只有已登入帳號可以讀取、修改或刪除名單。
 
-## 建立資料庫
+## 建立資料庫與管理帳號
 
-1. 建立 Supabase 專案。
-2. 開啟 SQL Editor，將 `supabase/schema.sql` 全文貼上並執行。
-3. 確認 `followup_records` 與 `followup_staff` 都已啟用 Row Level Security。資料表政策已限制匿名使用者，只有核准人員可存取。
+1. 在 Supabase 專案的 **Authentication → Sign In / Providers** 確認 Email 登入已啟用。
+2. 在 **Authentication → Settings** 關閉公開使用者註冊（Disable sign-ups）。
+3. 在 **Authentication → Users** 手動新增管理者 Email 和密碼。不要在網站程式碼裡寫入密碼。
+4. 開啟 **SQL Editor**，執行 `supabase/schema.sql`。這會移除舊的公開讀取／修改政策，保留公開表單新增權限，並只讓登入帳號讀取、修改及刪除。
 
-## 建立人員帳號與授權
-
-1. 在 Authentication 設定中關閉公開註冊。
-2. 從 Authentication → Users 建立或邀請診所人員帳號。
-3. 在 SQL Editor 將每位核准人員加入允許名單，將下列 email 換成該人員的登入 email：
-
-```sql
-insert into public.followup_staff (user_id)
-select id from auth.users where email = 'staff@example.com'
-on conflict (user_id) do nothing;
-```
-
-人員需用上述帳號登入各裝置。未加入 `followup_staff` 的登入帳號仍無法讀取患者資料。
+請勿重新開啟公開註冊。資料庫政策允許已登入的 Supabase 使用者查看名單，因此只應手動建立可信任的管理帳號。
 
 ## 設定網站連線
 
@@ -33,9 +22,9 @@ on conflict (user_id) do nothing;
 
 ## 發佈
 
-將更新後的 HTML、`app.js`、`supabase-config.js`、`brand-logo.png` 與 `supabase/schema.sql` 推送到啟用 GitHub Pages 的 `inumagic/follow-up` 儲存庫。部署完成後，所有已授權人員會看到同一份名單。
+將更新後的 HTML、`app.js`、`supabase-config.js`、`brand-logo.png` 與 `supabase/schema.sql` 推送到啟用 GitHub Pages 的儲存庫。部署程式碼後，仍須在 Supabase SQL Editor 執行上述 schema，資料庫才會停止公開讀取。
 
 ## 匯入此瀏覽器的舊資料
 
-若這台裝置先前用過 localStorage 版本，登入管理頁後會出現「匯入此裝置舊資料」按鈕。確認匯入後會把舊紀錄放進雲端；原始資料會保留在此裝置。每台曾經新增過紀錄的裝置都要各自匯入一次。
+若這台裝置先前用過 localStorage 版本，管理頁登入後會出現「匯入此裝置舊資料」按鈕。確認匯入後會把舊紀錄放進雲端；原始資料會保留在此裝置。每台曾經新增過紀錄的裝置都要各自匯入一次。
 
