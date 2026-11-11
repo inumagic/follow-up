@@ -5,6 +5,10 @@ const intervalSelect = document.getElementById("interval");
 const customDaysField = document.getElementById("customDaysField");
 const customDaysInput = document.getElementById("customDays");
 const recordsBody = document.getElementById("recordsBody");
+const editRecordDialog = document.getElementById("editRecordDialog");
+const editRecordForm = document.getElementById("editRecordForm");
+const editTodayTreatmentsContainer = document.getElementById("editTodayTreatments");
+const editNextTreatmentsContainer = document.getElementById("editNextTreatments");
 const emptyState = document.getElementById("emptyState");
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
@@ -18,6 +22,7 @@ const nextTreatmentSummary = document.getElementById("nextTreatmentSummary");
 let records = [];
 let toastTimer;
 let supabaseClient = null;
+let editingRecordId = null;
 const treatmentOptions = Array.from({ length: 20 }, (_, index) => `療程${index + 1}`);
 
 function showToast(message) {
@@ -123,6 +128,8 @@ function populateTreatmentFilterOptions(select, label) {
 
 populateTreatmentOptions(todayTreatmentsContainer, "todayTreatment");
 populateTreatmentOptions(nextTreatmentsContainer, "nextTreatment");
+populateTreatmentOptions(editTodayTreatmentsContainer, "editTodayTreatment");
+populateTreatmentOptions(editNextTreatmentsContainer, "editNextTreatment");
 populateTreatmentFilterOptions(todayTreatmentFilter, "當天療程分類（全部）");
 populateTreatmentFilterOptions(nextTreatmentFilter, "下次療程分類（全部）");
 
@@ -264,6 +271,7 @@ function renderDashboard() {
       <td><div>${escapeHtml(formatDate(record.dueDate))}</div><div class="subtext">${escapeHtml(record.dueTime || "時間未定")}</div></td>
       <td>${(record.todayTreatments || []).map(escapeHtml).join("、") || "—"}</td>
       <td>${(record.treatments || []).map(escapeHtml).join("、") || "—"}</td>
+      <td><div class="note-cell-content" title="${escapeHtml(record.visitContent || "")}">${escapeHtml(record.visitContent || "—")}</div></td>
       <td>${escapeHtml(record.assistant)}</td>
       <td>
         <select class="status-select" data-record-id="${escapeHtml(record.id)}" aria-label="${escapeHtml(record.patientName)}的追蹤狀態">
@@ -273,7 +281,8 @@ function renderDashboard() {
         </select>
       </td>
       <td><a class="calendar-link" href="${escapeHtml(googleCalendarUrl(record))}" target="_blank" rel="noopener noreferrer">加入 Google 行事曆</a></td>
-      <td><button class="delete-record-button" type="button" data-record-id="${escapeHtml(record.id)}" aria-label="刪除 ${escapeHtml(record.patientName)} 的紀錄">刪除</button></td>
+      <td><button class="edit-record-button" type="button" data-record-id="${escapeHtml(record.id)}" aria-label="編輯 ${escapeHtml(record.patientName)} 的紀錄">編輯</button>
+        <button class="delete-record-button" type="button" data-record-id="${escapeHtml(record.id)}" aria-label="刪除 ${escapeHtml(record.patientName)} 的紀錄">刪除</button></td>
     </tr>
   `).join("");
 
@@ -293,6 +302,103 @@ function renderDashboard() {
     return due >= monthStart && due < nextMonthStart;
   }).length;
   document.getElementById("monthCount").textContent = String(dueThisMonth);
+}
+
+function setTreatmentChecks(container, selectedTreatments) {
+  if (!container) return;
+  container.querySelectorAll("input[type=checkbox]").forEach((input) => {
+    input.checked = selectedTreatments.includes(input.value);
+  });
+}
+
+function openRecordEditor(record) {
+  if (!editRecordDialog || !editRecordForm) return;
+  editingRecordId = record.id;
+  document.getElementById("editPatientName").value = record.patientName || "";
+  document.getElementById("editBirthDate").value = record.birthDate || "";
+  document.getElementById("editPhone").value = record.phone || "";
+  document.getElementById("editVisitDate").value = record.visitDate || "";
+  document.getElementById("editVisitContent").value = record.visitContent || "";
+  document.getElementById("editIntervalDays").value = record.intervalDays || 30;
+  document.getElementById("editDueDate").value = record.dueDate || "";
+  document.getElementById("editDueTime").value = record.dueTime || "";
+  document.getElementById("editAssistant").value = record.assistant || "";
+  document.getElementById("editStatus").value = record.status || "待聯絡";
+  setTreatmentChecks(editTodayTreatmentsContainer, record.todayTreatments || []);
+  setTreatmentChecks(editNextTreatmentsContainer, record.treatments || []);
+  editRecordDialog.showModal();
+}
+
+function selectedTreatments(container) {
+  return Array.from(container?.querySelectorAll("input[type=checkbox]:checked") || [])
+    .map((input) => input.value);
+}
+
+if (editRecordDialog) {
+  document.getElementById("closeEditDialog")?.addEventListener("click", () => editRecordDialog.close());
+  document.getElementById("cancelEditDialog")?.addEventListener("click", () => editRecordDialog.close());
+}
+
+if (editRecordForm) {
+  editRecordForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!editRecordForm.reportValidity()) return;
+    const record = records.find((item) => item.id === editingRecordId);
+    if (!record) {
+      showToast("找不到這筆資料，請重新整理頁面後再試。");
+      editRecordDialog.close();
+      return;
+    }
+
+    const intervalDays = Number(document.getElementById("editIntervalDays").value);
+    if (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 1095) {
+      showToast("回診間隔需為 1 至 1095 的整數。");
+      document.getElementById("editIntervalDays").focus();
+      return;
+    }
+
+    const birthDate = document.getElementById("editBirthDate").value;
+    const visitDate = document.getElementById("editVisitDate").value;
+    if (birthDate > visitDate) {
+      showToast("出生日期不能晚於看診日期。");
+      document.getElementById("editBirthDate").focus();
+      return;
+    }
+
+    const updatedRecord = {
+      ...record,
+      patientName: document.getElementById("editPatientName").value.trim(),
+      birthDate,
+      phone: document.getElementById("editPhone").value.trim(),
+      visitDate,
+      visitContent: document.getElementById("editVisitContent").value.trim(),
+      todayTreatments: selectedTreatments(editTodayTreatmentsContainer),
+      treatments: selectedTreatments(editNextTreatmentsContainer),
+      intervalDays,
+      dueDate: document.getElementById("editDueDate").value,
+      dueTime: document.getElementById("editDueTime").value,
+      assistant: document.getElementById("editAssistant").value.trim(),
+      status: document.getElementById("editStatus").value
+    };
+
+    const saveButton = document.getElementById("saveEditRecord");
+    saveButton.disabled = true;
+    try {
+      const { error } = await supabaseClient
+        .from("followup_records")
+        .update(toDatabaseRecord(updatedRecord))
+        .eq("id", record.id);
+      if (error) throw error;
+      editRecordDialog.close();
+      await refreshRecords();
+      showToast("回診資料已更新。");
+    } catch (error) {
+      console.error("Unable to update follow-up record.", error);
+      showToast(`修改失敗：${error.message || "請確認資料庫權限後重試。"}`);
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
 }
 
 if (intervalSelect && customDaysField && customDaysInput) {
@@ -378,6 +484,13 @@ if (form) {
 
 if (recordsBody) {
   recordsBody.addEventListener("click", async (event) => {
+    const editButton = event.target.closest(".edit-record-button");
+    if (editButton) {
+      const record = records.find((item) => item.id === editButton.dataset.recordId);
+      if (record) openRecordEditor(record);
+      return;
+    }
+
     const button = event.target.closest(".delete-record-button");
     if (!button) return;
 
